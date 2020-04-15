@@ -1,0 +1,11 @@
+Controlling Chaos
+Using Small Purturbations to Control Chaos
+https://en.wikipedia.org/wiki/Lorenz_system
+    Defines system
+    also gives python implementation for free... sweet
+Stack overflow and other online documentation and help for numpy and other things
+    https://www.w3resource.com/python-exercises/numpy/python-numpy-exercise-115.php
+    stack overflow
+    
+
+Good indexes...
