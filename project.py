@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from scipy.signal import place_poles
+import scipy
 from mpl_toolkits.mplot3d import Axes3D
-import control
 
 # %% [markdown]
 ## Lorenz system equations
@@ -45,6 +45,8 @@ def run_lorenz(state_init, t_end, rho=28.0, sigma=10.0, beta=8/3):
 time_span= 500.0
 states = run_lorenz([1.0, 1.0, 1.0], time_span, rho=rho)
 
+# %%
+
 # how to plot surface from stack overflow, thanks
 xx, yy = np.meshgrid(range(-30,30), range(-30,30))
 
@@ -52,28 +54,60 @@ xx, yy = np.meshgrid(range(-30,30), range(-30,30))
 z = np.ones((60,60)) * rho
 
 section_error = 0.1
-def get_surface_of_section(states, rho=28.0, section_error=0.1):
+def get_surface_of_section(states, rho=28.0, section_error=0.2):
 
     surface_indicies = np.where(np.abs(states[:,2] - rho) < section_error)[0]
 
     temp = []
     i = 0
     while i < len(surface_indicies):
-        if len(temp) != 0 and surface_indicies[i] == temp[-1] + 1: 
+        if len(temp) != 0 and surface_indicies[i] == temp[-1][0] + 1: 
             q = 1
-            while i < len(surface_indicies) and surface_indicies[i] == temp[-1] + q:
+            while i < len(surface_indicies) and surface_indicies[i] == temp[-1][0] + q:
+                temp[-1].append(surface_indicies[i])
                 i += 1
                 q += 1
         if i < len(surface_indicies):
-            temp.append(surface_indicies[i])
+            temp.append([surface_indicies[i]])
         i += 1
+    surface_of_section = []
+    # print(temp)
     for group in temp:
+        if len(group) < 4:
+            surface_of_section.append(states[group[len(group) // 2], :])
+            continue
+        chunk = states[group, :]
+        # print(chunk[:, :2])
+        # print(chunk[:, -1:])
+        t = np.linspace(chunk[0,0], chunk[-1,0], 50)
+        t2 = np.linspace(chunk[0,1], chunk[-1,1], 50)
+        T = np.vstack((t,t2))
+        # print(T.shape)
+        # print(T)
+        # print(chunk[:,:2].shape)
+        # print(chunk[:,-1:].shape)
+        interp = scipy.interpolate.griddata(chunk[:, :2], chunk[:, -1:], (t,t2), fill_value=rho + 10)
+        # stack overflow to the rescue again
+        # print(interp - 28.0)
+        closest_to_root = (np.abs(interp - 28.0)).argmin()
+        # print(T.shape)
+        # print(closest_to_root)
+        stacker = np.vstack((T, interp.T))
+        # print(stacker[:, closest_to_root])
+        point = stacker[:, closest_to_root]
+        surface_of_section.append(point)
+        # print(point)
+        # break
 
-    surface_indicies = np.array(temp)
-    upward_indicies = surface_indicies[::2]
 
-    surface_of_section = states[upward_indicies, :]
+    # get only upward facing indicies
+    surface_of_section = np.array(surface_of_section[::2])
+    # print(surface_of_section)
+    # upward_indicies = surface_indicies[::2]
+
+    # surface_of_section = states[upward_indicies, :]
     return surface_of_section
+    # return None
 
 surface_of_section = get_surface_of_section(states, rho, 0.1)
 
@@ -126,7 +160,6 @@ close = get_proximate_piercings(20, 1.0)
 # So being close to each other numerically in "close" should work
 
 # %%
-# Okay so now lets pick an arbitrary pair, say piercing 5 and 6
 # print(close[18])
 
 def get_piercing_pairs_close_to_point(point, radius = 1.0, period = 1):
@@ -148,11 +181,11 @@ def get_piercing_pairs_close_to_point(point, radius = 1.0, period = 1):
     close_piercings = np.array(temp)
     return close_piercings
 # point_of_interest = surface_of_section[close[18][0]]
-num = np.random.randint(len(close))
-# num = 18
+# num = np.random.randint(len(close))
+num = 6492
 point_of_interest = (surface_of_section[close[num][0]] + surface_of_section[close[num][1]])/2
 print(point_of_interest)
-close_piercings = get_piercing_pairs_close_to_point(point_of_interest, 1.0, 1)
+close_piercings = get_piercing_pairs_close_to_point(point_of_interest, 2.0, 1)
 print(close_piercings)
 
 # %% [markdown]
@@ -226,12 +259,12 @@ z_n_plus_indexes = close_piercings[:,1]
 
 _, _, Z_star_new = find_cycle_params(surface_of_section[z_n_indexes], surface_of_section[z_n_plus_indexes])
 # delta_p = np.array([delta_rho, 0, 0])
-print(Z_star_new)
-print(Z_star)
+# print(Z_star_new)
+# print(Z_star)
 # print(np.linalg.norm(delta_p))
 # I thought p might be a vector, but it makes more sense to just do one parameter at a time
 B = (Z_star_new - Z_star) / delta_rho
-print(B)
+# print(B)
 
 # %%
 # Now we need to get the k vector
@@ -244,15 +277,22 @@ print(B)
 # K = control.acker(A,B,[0.5,0.5,0.5])
 # K = control.acker(A,B,[0,0,0])
 K = place_poles(A,B.reshape((B.shape[0], 1)),[0, 0.1, 0.2]).gain_matrix
-print(K)
+# print(K)
 # def run_lorenz(state_init, t_end, rho=28.0, sigma=10.0, beta=8/3):
 
 # %%
+control_used = 0
     
 def f_control(state, t, poi, K=np.identity(3), rho = 28.0, sigma = 10.0, beta = 8/3, delta=0.1):
+    global control_used
     x, y, z = state  # Unpack the state vector
-    if z - rho < section_error and np.linalg.norm(state - poi) < delta and False:
+    if z - rho < section_error and np.linalg.norm(state - poi) < delta:
+    # if z - rho < section_error and np.linalg.norm(state - poi) < delta and False: # for testing what the trajectory would be without control
         # TODO I also need to determine if it is an upward or downward piercing
+        # if not control_used:
+        #     control_used = True
+        #     print("Control used")
+        control_used += 1
         rho_new = -K@(state-poi) + rho
         # print(rho_new)
         return sigma * (y - x), x * (rho_new - z) - y, x * y - beta * z  # Derivatives
@@ -264,16 +304,21 @@ def controlled_lorenz(state_init, t_end, poi, K, rho_init=28, sigma=10.0, beta=8
     t = np.arange(0.0, t_end, 0.001)
 
     states = odeint(f_control, state0, t, args=(poi, K, rho_init, sigma, beta, delta))
+    if control_used == 0:
+        print("No control used")
+    else:
+        print("Control used {} times".format(control_used))
     return states
 
 # states = controlled_lorenz([1.0, 1.0, 1.0], time_span, K=K, poi=Z_star, rho_init=rho, delta=1.0)
-states = controlled_lorenz([1.0, 1.0, 1.0], 40.0, K=K, poi=Z_star, rho_init=rho, delta=1.0)
-print(states.shape)
+states = controlled_lorenz([1.0, 1.0, 1.0], 50.0, K=K, poi=Z_star, rho_init=rho, delta=2.0)
+# print(states.shape)
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
-partition = states.shape[0] // 3
+# partition = states.shape[0] // 3
+partition = 5000
 ax.plot(states[:partition, 0], states[:partition, 1], states[:partition, 2], color="green")
-ax.plot(states[partition:-partition, 0], states[partition:-partition, 1], states[partition:-partition, 2])
+# ax.plot(states[partition:-partition, 0], states[partition:-partition, 1], states[partition:-partition, 2])
 ax.plot(states[-partition:, 0], states[-partition:, 1], states[-partition:, 2], color="yellow")
 # ax.plot(states[:, 0], states[:, 1], states[:, 2])
 ax.plot_surface(xx, yy, z, alpha=0.4)
