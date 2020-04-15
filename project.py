@@ -28,8 +28,8 @@ from mpl_toolkits.mplot3d import Axes3D
 # To get the surface of section, just take points from the integration that are equal to (or near I suppose the surface)
 
 rho = 28.0
-# sigma = 10.0
-# beta = 8.0 / 3.0
+sigma = 10.0
+beta = 8.0 / 3.0
 
 def f(state, t, rho = 28.0, sigma = 10.0, beta = 8/3):
     x, y, z = state  # Unpack the state vector
@@ -101,8 +101,15 @@ def get_surface_of_section(states, rho=28.0, section_error=0.2):
 
 
     # get only upward facing indicies
-    surface_of_section = np.array(surface_of_section[::2])
-    # print(surface_of_section)
+    # surface_of_section = np.array(surface_of_section[::2])
+    surface_of_section = np.array(surface_of_section)
+    indicies = np.where(surface_of_section[:,0] * surface_of_section[:,1] - beta * surface_of_section[:,2] > 0)
+    # print(indicies)
+    surface_of_section = surface_of_section[indicies]
+
+    # print(surface_of_section[:,2])
+    # print(surface_of_section[:,0] * surface_of_section[:,1] - beta * surface_of_section[:,2])
+    # print(surface_of_section.shape)
     # upward_indicies = surface_indicies[::2]
 
     # surface_of_section = states[upward_indicies, :]
@@ -182,7 +189,7 @@ def get_piercing_pairs_close_to_point(point, radius = 1.0, period = 1):
     return close_piercings
 # point_of_interest = surface_of_section[close[18][0]]
 # num = np.random.randint(len(close))
-num = 6492
+num = 3119
 point_of_interest = (surface_of_section[close[num][0]] + surface_of_section[close[num][1]])/2
 print(point_of_interest)
 close_piercings = get_piercing_pairs_close_to_point(point_of_interest, 2.0, 1)
@@ -276,28 +283,46 @@ B = (Z_star_new - Z_star) / delta_rho
 # print(B.shape)
 # K = control.acker(A,B,[0.5,0.5,0.5])
 # K = control.acker(A,B,[0,0,0])
-K = place_poles(A,B.reshape((B.shape[0], 1)),[0, 0.1, 0.2]).gain_matrix
+res = place_poles(A,B.reshape((B.shape[0], 1)),[0, 0.1, 0.2])
+# res = place_poles(A,B.reshape((B.shape[0], 1)),[0.5, 0.6, 0.7])
+K = res.gain_matrix
+print("Computed poles: {}".format(res.computed_poles))
+# TODO check that all poles of A-BK are actually stable
+#   If that doesn't work make the poles larger (still less than 1)
+#   For the example I'm currently using (172), it seems to be getting the poles right...
+
+
 # print(K)
 # def run_lorenz(state_init, t_end, rho=28.0, sigma=10.0, beta=8/3):
 
 # %%
 control_used = 0
+mag = 0
     
 def f_control(state, t, poi, K=np.identity(3), rho = 28.0, sigma = 10.0, beta = 8/3, delta=0.1):
     global control_used
+    global mag
     x, y, z = state  # Unpack the state vector
-    if z - rho < section_error and np.linalg.norm(state - poi) < delta:
+    if z - rho < section_error and np.linalg.norm(state - poi) < delta and x * y - beta * z > 0:
+        # print(x * y - beta * z)
     # if z - rho < section_error and np.linalg.norm(state - poi) < delta and False: # for testing what the trajectory would be without control
         # TODO I also need to determine if it is an upward or downward piercing
+        #   Try using scipy.integrate.solve_ivp, it has a place for events and they are zero crossings and you can even specify which direction the crossing is in!
+        #       So this has triggers when it crosses zeros of the function, but the surface of seciton is not the zeros and I can't figure out how to tell it to use that
         # if not control_used:
         #     control_used = True
         #     print("Control used")
         control_used += 1
         rho_new = -K@(state-poi) + rho
+        mag = max(mag, abs(rho_new - rho))
         # print(rho_new)
         return sigma * (y - x), x * (rho_new - z) - y, x * y - beta * z  # Derivatives
+        # TODO this is literally the derivitive fool this is what will tell you when it crosses from above or below
     else:
         return sigma * (y - x), x * (rho - z) - y, x * y - beta * z  # Derivatives
+
+# def control
+#     global control_used
 
 def controlled_lorenz(state_init, t_end, poi, K, rho_init=28, sigma=10.0, beta=8/3, delta=0.1):
     state0 = state_init
@@ -311,14 +336,14 @@ def controlled_lorenz(state_init, t_end, poi, K, rho_init=28, sigma=10.0, beta=8
     return states
 
 # states = controlled_lorenz([1.0, 1.0, 1.0], time_span, K=K, poi=Z_star, rho_init=rho, delta=1.0)
-states = controlled_lorenz([1.0, 1.0, 1.0], 50.0, K=K, poi=Z_star, rho_init=rho, delta=2.0)
+states = controlled_lorenz([1.0, 1.0, 1.0], 500.0, K=K, poi=Z_star, rho_init=rho, delta=2.0)
 # print(states.shape)
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
-# partition = states.shape[0] // 3
-partition = 5000
+partition = states.shape[0] // 3
+# partition = 5000
 ax.plot(states[:partition, 0], states[:partition, 1], states[:partition, 2], color="green")
-# ax.plot(states[partition:-partition, 0], states[partition:-partition, 1], states[partition:-partition, 2])
+ax.plot(states[partition:-partition, 0], states[partition:-partition, 1], states[partition:-partition, 2])
 ax.plot(states[-partition:, 0], states[-partition:, 1], states[-partition:, 2], color="yellow")
 # ax.plot(states[:, 0], states[:, 1], states[:, 2])
 ax.plot_surface(xx, yy, z, alpha=0.4)
@@ -329,6 +354,8 @@ ax.scatter(states[0, 0], states[0, 1], states[0, 2], color="green")
 
 # %%
 # For when I run this not in a notebook
-print("num: {}".format(num))
+print("Max control magnitude: {}".format(mag))
+print("Num: {}".format(num))
+print(states[-1,:])
 plt.draw()
 plt.show()

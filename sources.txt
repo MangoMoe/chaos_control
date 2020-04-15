@@ -9,4 +9,11 @@ Stack overflow and other online documentation and help for numpy and other thing
     
 
 Good indexes...
-6492
+6492 (nevermind its a fluke -_-)
+3119!!!!!!! this one really works!!!!!
+172????
+7368???
+Bad indexes...
+4165 (not working, actually destabilizes it....)
+4983 (not working, actually destabilizes it....)
+4080 (Doesn't even really affect it)
