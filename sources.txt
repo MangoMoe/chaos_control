@@ -13,6 +13,7 @@ Good indexes...
 3119!!!!!!! this one really works!!!!!
 172????
 7368???
+8118???
 Bad indexes...
 4165 (not working, actually destabilizes it....)
 4983 (not working, actually destabilizes it....)

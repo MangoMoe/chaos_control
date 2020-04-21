@@ -43,7 +43,8 @@ def run_lorenz(state_init, t_end, rho=28.0, sigma=10.0, beta=8/3):
     return states
 
 time_span= 500.0
-states = run_lorenz([1.0, 1.0, 1.0], time_span, rho=rho)
+initial_state = [1.0, 1.0, 1.0]
+states = run_lorenz(initial_state, time_span, rho=rho)
 
 # %%
 
@@ -189,7 +190,10 @@ def get_piercing_pairs_close_to_point(point, radius = 1.0, period = 1):
     return close_piercings
 # point_of_interest = surface_of_section[close[18][0]]
 # num = np.random.randint(len(close))
-num = 3119
+num = 3119 # this is one I found where it actually successfully stabilizes the limit cycle
+# num = 8118
+# num = 7319
+# num = 4788
 point_of_interest = (surface_of_section[close[num][0]] + surface_of_section[close[num][1]])/2
 print(point_of_interest)
 close_piercings = get_piercing_pairs_close_to_point(point_of_interest, 2.0, 1)
@@ -256,7 +260,7 @@ A, C, Z_star = find_cycle_params(surface_of_section[z_n_indexes], surface_of_sec
 #   This means running it again with a purturbation in our parameter that we will be able to change (which one is that?)
 delta_rho = 0.01
 
-states = run_lorenz([1.0, 1.0, 1.0], time_span, rho=rho + delta_rho)
+states = run_lorenz(initial_state, time_span, rho=rho + delta_rho)
 surface_of_section = get_surface_of_section(states, rho + delta_rho, 0.1)
 close = get_proximate_piercings(20, 1.0)
 close_piercings = get_piercing_pairs_close_to_point(point_of_interest, 1.0, 1)
@@ -336,15 +340,16 @@ def controlled_lorenz(state_init, t_end, poi, K, rho_init=28, sigma=10.0, beta=8
     return states
 
 # states = controlled_lorenz([1.0, 1.0, 1.0], time_span, K=K, poi=Z_star, rho_init=rho, delta=1.0)
-states = controlled_lorenz([1.0, 1.0, 1.0], 500.0, K=K, poi=Z_star, rho_init=rho, delta=2.0)
+# TODO calculate for what area around your point that the controller is valid for
+states = controlled_lorenz(initial_state, 500.0, K=K, poi=Z_star, rho_init=rho, delta=3.0)
 # print(states.shape)
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
 partition = states.shape[0] // 3
 # partition = 5000
 ax.plot(states[:partition, 0], states[:partition, 1], states[:partition, 2], color="green")
-ax.plot(states[partition:-partition, 0], states[partition:-partition, 1], states[partition:-partition, 2])
-ax.plot(states[-partition:, 0], states[-partition:, 1], states[-partition:, 2], color="yellow")
+# ax.plot(states[partition:-partition, 0], states[partition:-partition, 1], states[partition:-partition, 2])
+ax.plot(states[-partition:, 0], states[-partition:, 1], states[-partition:, 2], color="red")
 # ax.plot(states[:, 0], states[:, 1], states[:, 2])
 ax.plot_surface(xx, yy, z, alpha=0.4)
 # ax.scatter(surface_of_section[close, 0], surface_of_section[close, 1], surface_of_section[close, 2], color='r', s=1)
